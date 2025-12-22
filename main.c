@@ -60,13 +60,13 @@ int main(void) {
             if (graph.zoom < 0.1f) graph.zoom = 0.1f;
         }
 
-        // Draw
+        // Draw :]
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
         Graph_DrawGrid(&graph, screenWidth, screenHeight);
 
-        // Plot Function
+       
         Parser p;
         if (letterCount > 0) {
             Vector2 prevPoint = { 0, 0 };

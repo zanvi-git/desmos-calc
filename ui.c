@@ -1,7 +1,7 @@
 #include "ui.h"
 #include <string.h>
 
-void DrawButton(Button *btn) {
+void DrawButton(Button *btn, Font font) {
     Color drawColor = btn->color;
     if (CheckCollisionPointRec(GetMousePosition(), btn->rect)) {
         drawColor = btn->hoverColor;
@@ -10,12 +10,12 @@ void DrawButton(Button *btn) {
     DrawRectangleRec(btn->rect, drawColor);
     DrawRectangleLinesEx(btn->rect, 1, DARKGRAY);
     
-    int fontSize = 20;
-    int textWidth = MeasureText(btn->text, fontSize);
-    DrawText(btn->text, 
-             btn->rect.x + (btn->rect.width - textWidth) / 2, 
-             btn->rect.y + (btn->rect.height - fontSize) / 2, 
-             fontSize, btn->textColor);
+    float fontSize = 20;
+    Vector2 textSize = MeasureTextEx(font, btn->text, fontSize, 2);
+    DrawTextEx(font, btn->text, 
+               (Vector2){ btn->rect.x + (btn->rect.width - textSize.x) / 2, 
+                          btn->rect.y + (btn->rect.height - textSize.y) / 2 }, 
+               fontSize, 2, btn->textColor);
 }
 
 bool CheckButton(Button *btn) {
@@ -25,17 +25,18 @@ bool CheckButton(Button *btn) {
     return false;
 }
 
-void DrawInputField(InputField *input) {
+void DrawInputField(InputField *input, Font font) {
     DrawRectangleRec(input->rect, WHITE);
     DrawRectangleLinesEx(input->rect, 2, input->focused ? BLUE : DARKGRAY);
     
-    DrawText(input->text, input->rect.x + 5, input->rect.y + 10, 20, BLACK);
+    float fontSize = 20;
+    DrawTextEx(font, input->text, (Vector2){ input->rect.x + 5, input->rect.y + 10 }, fontSize, 2, BLACK);
     
     if (input->focused) {
         // Simple blinking cursor
         if (((int)(GetTime() * 2) % 2) == 0) {
-            int textWidth = MeasureText(input->text, 20);
-            DrawRectangle(input->rect.x + 5 + textWidth, input->rect.y + 10, 2, 20, BLACK);
+            Vector2 textSize = MeasureTextEx(font, input->text, fontSize, 2);
+            DrawRectangle(input->rect.x + 5 + textSize.x, input->rect.y + 10, 2, fontSize, BLACK);
         }
     }
 }
@@ -88,7 +89,7 @@ void InitKeyboard(Keyboard *kb, int screenWidth, int screenHeight) {
     }
 }
 
-void DrawKeyboard(Keyboard *kb) {
+void DrawKeyboard(Keyboard *kb, Font font) {
     if (!kb->visible) return;
 
     DrawRectangleRec(kb->rect, (Color){ 240, 240, 240, 255 });
@@ -107,9 +108,12 @@ void DrawKeyboard(Keyboard *kb) {
             DrawRectangleRounded(btnRect, 0.2f, 8, hover ? LIGHTGRAY : WHITE);
             DrawRectangleRoundedLines(btnRect, 0.2f, 8, DARKGRAY);
             
-            int fontSize = 16;
-            int textWidth = MeasureText(kb->keys[i][j], fontSize);
-            DrawText(kb->keys[i][j], btnRect.x + (btnRect.width - textWidth)/2, btnRect.y + (btnRect.height - fontSize)/2, fontSize, BLACK);
+            float fontSize = 16;
+            Vector2 textSize = MeasureTextEx(font, kb->keys[i][j], fontSize, 2);
+            DrawTextEx(font, kb->keys[i][j], 
+                       (Vector2){ btnRect.x + (btnRect.width - textSize.x)/2, 
+                                  btnRect.y + (btnRect.height - textSize.y)/2 }, 
+                       fontSize, 2, BLACK);
         }
     }
 }

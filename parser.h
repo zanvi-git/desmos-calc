@@ -27,7 +27,7 @@ typedef enum {
     FUNC_NONE
 } FuncType;
 
-typedef struct { //u reading my code?? :3
+typedef struct {
     TokenType type;
     double value;
     FuncType func;
@@ -42,4 +42,4 @@ typedef struct {
 void Parser_Init(Parser* p, const char* input);
 double Parser_Evaluate(Parser* p, double x);
 
-#endif 
+#endif // PARSER_H

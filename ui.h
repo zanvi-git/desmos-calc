@@ -27,14 +27,14 @@ typedef struct {
     const char *keys[4][10];
 } Keyboard;
 
-void DrawButton(Button *btn);
+void DrawButton(Button *btn, Font font);
 bool CheckButton(Button *btn);
 
-void DrawInputField(InputField *input);
+void DrawInputField(InputField *input, Font font);
 void UpdateInputField(InputField *input);
 
 void InitKeyboard(Keyboard *kb, int screenWidth, int screenHeight);
-void DrawKeyboard(Keyboard *kb);
+void DrawKeyboard(Keyboard *kb, Font font);
 const char* UpdateKeyboard(Keyboard *kb);
 
 #endif

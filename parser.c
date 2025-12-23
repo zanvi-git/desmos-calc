@@ -134,13 +134,22 @@ static double Power(Parser* p, double x) {
 
 static double Term(Parser* p, double x) {
     double left = Power(p, x);
-    while (p->current.type == TOKEN_MULTIPLY || p->current.type == TOKEN_DIVIDE) {
+    while (p->current.type == TOKEN_MULTIPLY || p->current.type == TOKEN_DIVIDE ||
+           p->current.type == TOKEN_VARIABLE || p->current.type == TOKEN_LPAREN ||
+           p->current.type == TOKEN_FUNCTION) {
+        
         TokenType type = p->current.type;
-        GetNextToken(p);
-        double right = Power(p, x);
-        if (type == TOKEN_MULTIPLY) left *= right;
-        else if (right != 0) left /= right;
-        else left = 0; // Or NaN
+        if (type == TOKEN_MULTIPLY || type == TOKEN_DIVIDE) {
+            GetNextToken(p);
+            double right = Power(p, x);
+            if (type == TOKEN_MULTIPLY) left *= right;
+            else if (right != 0) left /= right;
+            else left = 0;
+        } else {
+            // Implicit multiplication
+            double right = Power(p, x);
+            left *= right;
+        }
     }
     return left;
 }

@@ -1,7 +1,6 @@
 #include "graph.h"
 #include <math.h>
 #include <stdio.h>
-//cartesian to screen coordinates 
 
 void Graph_Init(GraphState* state) {
     state->minX = -10.0f;
@@ -36,18 +35,18 @@ void Graph_DrawGrid(GraphState* state, int width, int height) {
     float xRange = (state->maxX - state->minX) / state->zoom;
     float yRange = (state->maxY - state->minY) / state->zoom;
     
-    //simple grid calculation
+    // Simple grid step calculation
     float step = powf(10, floorf(log10f(xRange / 5.0f)));
     if (xRange / step > 20) step *= 2;
     if (xRange / step < 5) step /= 2;
 
     Vector2 zero = Graph_ToScreen(state, (Vector2){0, 0}, width, height);
 
-    // draw axes :3
+    // Draw Axes
     DrawLine(0, zero.y, width, zero.y, GRAY);
     DrawLine(zero.x, 0, zero.x, height, GRAY);
 
-    // grid lines
+    // Draw grid lines
     float startX = floorf(state->minX / step) * step;
     for (float x = startX; x <= state->maxX; x += step) {
         Vector2 p = Graph_ToScreen(state, (Vector2){x, 0}, width, height);

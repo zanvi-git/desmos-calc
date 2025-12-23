@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include "parser.h"
 #include "graph.h"
+#include "ui.h"
 #include <string.h>
 #include <math.h>
 
@@ -15,37 +16,43 @@ int main(void) {
     GraphState graph;
     Graph_Init(&graph);
 
-    char input[MAX_INPUT_CHARS] = "x^2";
-    int letterCount = strlen(input);
-    
-    Rectangle textBox = { 10, 10, 225, 30 };
-    bool mouseOnText = false;
+    Font font = LoadFontEx("C:\\Windows\\Fonts\\arial.ttf", 32, 0, 250);
+    if (font.texture.id == 0) font = GetFontDefault();
+
+    InputField equationInput = { .rect = { 10, 10, 300, 40 }, .focused = false, .letterCount = 0 };
+    strcpy(equationInput.text, "x^2");
+    equationInput.letterCount = strlen(equationInput.text);
+
+    Keyboard kb;
+    InitKeyboard(&kb, screenWidth, screenHeight);
 
     SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
-        // Update
-        if (CheckCollisionPointRec(GetMousePosition(), textBox)) mouseOnText = true;
-        else mouseOnText = false;
-
-        if (mouseOnText) {
-            SetMouseCursor(MOUSE_CURSOR_IBEAM);
-            int key = GetCharPressed();
-            while (key > 0) {
-                if ((key >= 32) && (key <= 125) && (letterCount < MAX_INPUT_CHARS - 1)) {
-                    input[letterCount] = (char)key;
-                    input[letterCount + 1] = '\0';
-                    letterCount++;
+        // Update UI
+        UpdateInputField(&equationInput);
+        const char *kbKey = UpdateKeyboard(&kb);
+        if (kbKey != NULL) {
+            if (strcmp(kbKey, "C") == 0) {
+                equationInput.text[0] = '\0';
+                equationInput.letterCount = 0;
+            } else if (strcmp(kbKey, "<-") == 0) {
+                if (equationInput.letterCount > 0) {
+                    equationInput.letterCount--;
+                    equationInput.text[equationInput.letterCount] = '\0';
                 }
-                key = GetCharPressed();
+            } else if (strcmp(kbKey, "=") == 0) {
+                // Could trigger evaluation or something
+            } else if (strcmp(kbKey, " ") != 0) {
+                int len = strlen(kbKey);
+                if (equationInput.letterCount + len < 255) {
+                    strcat(equationInput.text, kbKey);
+                    equationInput.letterCount += len;
+                }
             }
+        }
 
-            if (IsKeyPressed(KEY_BACKSPACE)) {
-                letterCount--;
-                if (letterCount < 0) letterCount = 0;
-                input[letterCount] = '\0';
-            }
-        } else SetMouseCursor(MOUSE_CURSOR_DEFAULT);
+        if (IsKeyPressed(KEY_K)) kb.visible = !kb.visible;
 
         // Zoom & Pan
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
@@ -60,21 +67,21 @@ int main(void) {
             if (graph.zoom < 0.1f) graph.zoom = 0.1f;
         }
 
-        // Draw :]
+        // Draw
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
         Graph_DrawGrid(&graph, screenWidth, screenHeight);
 
-       
+        // Plot Function
         Parser p;
-        if (letterCount > 0) {
+        if (equationInput.letterCount > 0) {
             Vector2 prevPoint = { 0, 0 };
             bool first = true;
             
             for (int i = 0; i < screenWidth; i++) {
                 Vector2 cart = Graph_ToCartesian(&graph, (Vector2){ (float)i, 0 }, screenWidth, screenHeight);
-                Parser_Init(&p, input);
+                Parser_Init(&p, equationInput.text);
                 float val = (float)Parser_Evaluate(&p, cart.x);
                 Vector2 screenPoint = Graph_ToScreen(&graph, (Vector2){ cart.x, val }, screenWidth, screenHeight);
 
@@ -89,16 +96,15 @@ int main(void) {
         }
 
         // UI
-        DrawRectangleRec(textBox, LIGHTGRAY);
-        if (mouseOnText) DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, RED);
-        else DrawRectangleLines((int)textBox.x, (int)textBox.y, (int)textBox.width, (int)textBox.height, DARKGRAY);
-
-        DrawText(input, (int)textBox.x + 5, (int)textBox.y + 8, 20, MAROON);
-        DrawText(TextFormat("INPUT: %i/%i", letterCount, MAX_INPUT_CHARS), 10, 45, 10, DARKGRAY);
+        DrawInputField(&equationInput, font);
+        DrawKeyboard(&kb, font);
+        
+        DrawTextEx(font, "Press 'K' to toggle keyboard", (Vector2){ 10, (float)screenHeight - 20 }, 10, 2, DARKGRAY);
 
         EndDrawing();
     }
 
+    UnloadFont(font);
     CloseWindow();
 
     return 0;

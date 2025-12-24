@@ -34,6 +34,7 @@ void DrawInputField(InputField *input, Font font);
 void UpdateInputField(InputField *input);
 
 void InitKeyboard(Keyboard *kb, int screenWidth, int screenHeight);
+void ResizeKeyboard(Keyboard *kb, int screenWidth, int screenHeight);
 void DrawKeyboard(Keyboard *kb, Font font);
 const char* UpdateKeyboard(Keyboard *kb);
 

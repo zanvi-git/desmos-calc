@@ -53,10 +53,40 @@ void ParseEquation(Equation* eq) {
     eq->ast = Parser_Parse(exprStart);
 }
 
-int main(void) {
-    const int screenWidth = 800;
-    const int screenHeight = 600;
+void SaveEquations(Equation* equations, int count, const char* filename) {
+    FILE* file = fopen(filename, "w");
+    if (file == NULL) return;
 
+    for (int i = 0; i < count; i++) {
+        fprintf(file, "%s\n", equations[i].input.text);
+    }
+    fclose(file);
+}
+
+void LoadEquations(Equation* equations, int count, const char* filename) {
+    FILE* file = fopen(filename, "r");
+    if (file == NULL) return;
+
+    char buffer[256];
+    int i = 0;
+    while (fgets(buffer, sizeof(buffer), file) && i < count) {
+        // Remove newline
+        buffer[strcspn(buffer, "\r\n")] = 0;
+        if (strlen(buffer) > 0) {
+           strcpy(equations[i].input.text, buffer);
+           equations[i].input.letterCount = strlen(buffer);
+        }
+        i++;
+    }
+    fclose(file);
+}
+
+
+int main(void) {
+    int screenWidth = 800;
+    int screenHeight = 600;
+
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "Graphing Calculator");
 
     GraphState graph;
@@ -83,9 +113,13 @@ int main(void) {
     }
     
     // Initial equation
-    strcpy(equations[0].input.text, "x^2");
-    equations[0].input.letterCount = strlen(equations[0].input.text);
-
+    // Load from history if available, otherwise default
+    LoadEquations(equations, MAX_EQUATIONS, "history.txt");
+    if (equations[0].input.letterCount == 0) {
+        strcpy(equations[0].input.text, "x^2");
+        equations[0].input.letterCount = strlen(equations[0].input.text);
+    }
+    
     int activeEqIndex = 0;
 
     Keyboard kb;
@@ -93,7 +127,18 @@ int main(void) {
 
     SetTargetFPS(60);
 
+    // Dropped Points
+    #define MAX_POINTS 100
+    Vector2 droppedPoints[MAX_POINTS];
+    int droppedPointCount = 0;
+
     while (!WindowShouldClose()) {
+        if (IsWindowResized()) {
+            screenWidth = GetScreenWidth();
+            screenHeight = GetScreenHeight();
+            ResizeKeyboard(&kb, screenWidth, screenHeight);
+        }
+
         // Handle Mouse Clicks to switch focus
         if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
             Vector2 mouse = GetMousePosition();
@@ -142,7 +187,15 @@ int main(void) {
         }
 
         // Zoom & Pan
-        if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT) || (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle){0,0,320, 50*MAX_EQUATIONS}))) {
+        // Handle Point Dropping: Ctrl + Left Click
+        if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && IsKeyDown(KEY_LEFT_CONTROL)) {
+             if (droppedPointCount < MAX_POINTS && !CheckCollisionPointRec(GetMousePosition(), (Rectangle){0,0,320, 50*MAX_EQUATIONS})) {
+                 Vector2 mousePos = GetMousePosition();
+                 Vector2 worldPos = Graph_ToCartesian(&graph, mousePos, screenWidth, screenHeight);
+                 droppedPoints[droppedPointCount++] = worldPos;
+             }
+        }
+        else if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT) || (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle){0,0,320, 50*MAX_EQUATIONS}))) {
              bool clickedInput = false;
              for(int i=0; i<MAX_EQUATIONS; i++) {
                  if (CheckCollisionPointRec(GetMousePosition(), equations[i].input.rect)) clickedInput = true;
@@ -234,6 +287,21 @@ int main(void) {
             }
         }
 
+        // Draw Dropped Points
+        for (int i = 0; i < droppedPointCount; i++) {
+            Vector2 screenPos = Graph_ToScreen(&graph, droppedPoints[i], screenWidth, screenHeight);
+            DrawCircleV(screenPos, 5, BLUE);
+            DrawCircleLines(screenPos.x, screenPos.y, 5, DARKBLUE);
+            DrawText(TextFormat("(%.2f, %.2f)", droppedPoints[i].x, droppedPoints[i].y), screenPos.x + 8, screenPos.y - 10, 10, DARKBLUE);
+        }
+
+        // Hover Coordinates
+        Vector2 mousePos = GetMousePosition();
+        if (mousePos.x > 320) { // If not over sidebar (roughly)
+            Vector2 worldPos = Graph_ToCartesian(&graph, mousePos, screenWidth, screenHeight);
+            DrawText(TextFormat("(%.2f, %.2f)", worldPos.x, worldPos.y), mousePos.x + 15, mousePos.y + 15, 20, DARKGRAY);
+        }
+
         // UI
         // Draw sidebar background
         DrawRectangle(0, 0, 320, screenHeight, Fade(LIGHTGRAY, 0.5f)); // Extend sidebar background to full height
@@ -250,6 +318,8 @@ int main(void) {
 
         EndDrawing();
     }
+
+    SaveEquations(equations, MAX_EQUATIONS, "history.txt");
 
     UnloadFont(font);
     CloseWindow();

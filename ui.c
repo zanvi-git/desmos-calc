@@ -177,3 +177,8 @@ bool DrawSlider(Rectangle rect, const char* text, float* value, float min, float
     // Let caller draw value if they want, or just verify logic.
     return changed;
 }
+
+void ResizeKeyboard(Keyboard *kb, int screenWidth, int screenHeight) {
+    float kbHeight = 200;
+    kb->rect = (Rectangle){ 0, (float)screenHeight - kbHeight, (float)screenWidth, kbHeight };
+}

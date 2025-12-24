@@ -37,4 +37,7 @@ void InitKeyboard(Keyboard *kb, int screenWidth, int screenHeight);
 void DrawKeyboard(Keyboard *kb, Font font);
 const char* UpdateKeyboard(Keyboard *kb);
 
+
+bool DrawSlider(Rectangle rect, const char* text, float* value, float min, float max, Font font);
+
 #endif

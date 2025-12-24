@@ -23,19 +23,20 @@ typedef struct {
     bool visible;
     Relation rel;
     char parsedExpr[256];
+    char lastInput[256];
+    ASTNode* ast;
 } Equation;
 
 void ParseEquation(Equation* eq) {
+    if (strcmp(eq->input.text, eq->lastInput) == 0 && eq->ast != NULL) return;
+    
+    strcpy(eq->lastInput, eq->input.text);
+    if (eq->ast) { AST_Free(eq->ast); eq->ast = NULL; }
+
     const char* text = eq->input.text;
     eq->rel = REL_EQ;
     const char* exprStart = text;
 
-    // Check for "y <", "y >", "y <=", "y >="
-    // Simplistic check: assume user types "y" then relation
-    // Or maybe just "<", ">" at the start implies "y < ..."
-    // Let's support implicit "y=" if no relation found.
-    // If user types "< x", it means "y < x".
-    
     if (strncmp(text, "y<=", 3) == 0) { eq->rel = REL_LE; exprStart = text + 3; }
     else if (strncmp(text, "y>=", 3) == 0) { eq->rel = REL_GE; exprStart = text + 3; }
     else if (strncmp(text, "y<", 2) == 0) { eq->rel = REL_LT; exprStart = text + 2; }
@@ -46,16 +47,17 @@ void ParseEquation(Equation* eq) {
     else if (text[0] == '<') { eq->rel = REL_LT; exprStart = text + 1; }
     else if (text[0] == '>') { eq->rel = REL_GT; exprStart = text + 1; }
     
-    // Copy the rest as the expression
-    while (*exprStart == ' ') exprStart++; // Skip spaces
+    while (*exprStart == ' ') exprStart++;
     strcpy(eq->parsedExpr, exprStart);
+    
+    eq->ast = Parser_Parse(exprStart);
 }
 
 int main(void) {
     const int screenWidth = 800;
     const int screenHeight = 600;
 
-    InitWindow(screenWidth, screenHeight, "C-Desmos Graphing Calculator");
+    InitWindow(screenWidth, screenHeight, "Graphing Calculator");
 
     GraphState graph;
     Graph_Init(&graph);
@@ -76,6 +78,8 @@ int main(void) {
         equations[i].visible = true;
         equations[i].parsedExpr[0] = '\0';
         equations[i].input.text[0] = '\0';
+        equations[i].lastInput[0] = '\0';
+        equations[i].ast = NULL;
     }
     
     // Initial equation
@@ -120,7 +124,7 @@ int main(void) {
                     currentInput->text[currentInput->letterCount] = '\0';
                 }
             } else if (strcmp(kbKey, "=") == 0) {
-                // Parse on Enter/= key? For now we parse every frame or when changed
+                // Parse on Enter/= key?
             } else if (strcmp(kbKey, " ") != 0) {
                 int len = strlen(kbKey);
                 if (currentInput->letterCount + len < 255) {
@@ -132,15 +136,13 @@ int main(void) {
 
         if (IsKeyPressed(KEY_K)) kb.visible = !kb.visible;
         
-        // Handle Tab to cycle equations
+        // handle Tab to cycle equations
         if (IsKeyPressed(KEY_TAB)) {
             activeEqIndex = (activeEqIndex + 1) % MAX_EQUATIONS;
         }
 
         // Zoom & Pan
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT) || (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !CheckCollisionPointRec(GetMousePosition(), (Rectangle){0,0,320, 50*MAX_EQUATIONS}))) {
-             // Only pan if not clicking on UI (checking a safe area approx)
-             // Actually, simplest is to check if we didn't click an input field
              bool clickedInput = false;
              for(int i=0; i<MAX_EQUATIONS; i++) {
                  if (CheckCollisionPointRec(GetMousePosition(), equations[i].input.rect)) clickedInput = true;
@@ -148,33 +150,46 @@ int main(void) {
              
              if (!clickedInput || IsMouseButtonDown(MOUSE_BUTTON_RIGHT)) {
                 Vector2 delta = GetMouseDelta();
-                graph.offset.x += delta.x;
-                graph.offset.y += delta.y;
+                graph.centerX -= delta.x / graph.scale;
+                graph.centerY += delta.y / graph.scale; 
              }
         }
 
         float wheel = GetMouseWheelMove();
         if (wheel != 0) {
-            graph.zoom += wheel * 0.1f;
-            if (graph.zoom < 0.1f) graph.zoom = 0.1f;
+            Vector2 mousePos = GetMousePosition();
+            Vector2 mouseWorldBefore = Graph_ToCartesian(&graph, mousePos, screenWidth, screenHeight);
+            
+            float scaleFactor = 1.1f;
+            if (wheel > 0) graph.scale *= scaleFactor;
+            else graph.scale /= scaleFactor;
+            
+            // adjust center so that mouseWorld remains under mousePos
+            Vector2 mouseWorldAfter = Graph_ToCartesian(&graph, mousePos, screenWidth, screenHeight);
+            graph.centerX += (mouseWorldBefore.x - mouseWorldAfter.x);
+            graph.centerY += (mouseWorldBefore.y - mouseWorldAfter.y);
         }
 
-        // Draw
+        // draw
         BeginDrawing();
         ClearBackground(RAYWHITE);
 
         Graph_DrawGrid(&graph, screenWidth, screenHeight);
-
+        
         // Plot Functions
-        Parser p;
+        EvalContext ctx;
+        ctx.y = 0; 
+        ctx.t = 0; // Default time to 0
+
+
         for (int eqIdx = 0; eqIdx < MAX_EQUATIONS; eqIdx++) {
             Equation* eq = &equations[eqIdx];
             if (eq->input.letterCount == 0) continue;
 
             ParseEquation(eq);
             
-            // Optimization: If expr is empty, skip
-            if (strlen(eq->parsedExpr) == 0) continue;
+            // Optimization: If expr is empty or ast is null, skip
+            if (!eq->ast) continue;
 
             Color plotColor = eq->color;
             Color shadeColor = Fade(plotColor, 0.3f);
@@ -183,24 +198,26 @@ int main(void) {
             bool first = true;
             
             for (int i = 0; i < screenWidth; i++) {
-                // Optimization: Step size could be larger for performance, but 1px is fine for now
-                Vector2 cart = Graph_ToCartesian(&graph, (Vector2){ (float)i, 0 }, screenWidth, screenHeight);
+                // High precision conversion for infinite zoom
+                double worldX = ((double)i - screenWidth / 2.0) / graph.scale + graph.centerX;
                 
-                Parser_Init(&p, eq->parsedExpr);
-                float val = (float)Parser_Evaluate(&p, cart.x);
+                ctx.x = worldX;
+                double val = AST_Evaluate(eq->ast, &ctx);
                 
-                // Convert value back to screen coordinates
-                Vector2 screenPoint = Graph_ToScreen(&graph, (Vector2){ cart.x, val }, screenWidth, screenHeight);
-                float yScreen = screenPoint.y;
-
+                // Convert value back to screen coordinates manually for precision intermediate
+                // screenY = height/2 - (val - centerY) * scale
+                double screenY = (double)screenHeight / 2.0 - (val - graph.centerY) * graph.scale;
+                
+                Vector2 screenPoint = { (float)i, (float)screenY };
+                
                 if (!isnan(val) && !isinf(val)) {
                     // Shading
                     if (eq->rel == REL_LT || eq->rel == REL_LE) {
-                        // y < val => Screen Y > yScreen (since screen Y goes down)
-                        DrawLine(i, (int)yScreen, i, screenHeight, shadeColor);
+                        // y < val => Screen Y > screenY
+                        DrawLine(i, (int)screenY, i, screenHeight, shadeColor);
                     } else if (eq->rel == REL_GT || eq->rel == REL_GE) {
-                        // y > val => Screen Y < yScreen
-                        DrawLine(i, 0, i, (int)yScreen, shadeColor);
+                        // y > val => Screen Y < screenY
+                        DrawLine(i, 0, i, (int)screenY, shadeColor);
                     }
 
                     // Line Drawing
@@ -219,7 +236,7 @@ int main(void) {
 
         // UI
         // Draw sidebar background
-        DrawRectangle(0, 0, 320, 10 + MAX_EQUATIONS * 50, Fade(LIGHTGRAY, 0.5f));
+        DrawRectangle(0, 0, 320, screenHeight, Fade(LIGHTGRAY, 0.5f)); // Extend sidebar background to full height
         
         for (int i = 0; i < MAX_EQUATIONS; i++) {
              DrawInputField(&equations[i].input, font);

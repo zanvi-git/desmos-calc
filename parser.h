@@ -3,7 +3,7 @@
 
 typedef enum {
     TOKEN_NUMBER,
-    TOKEN_VARIABLE, // 'x'
+    TOKEN_VARIABLE, 
     TOKEN_PLUS,
     TOKEN_MINUS,
     TOKEN_MULTIPLY,
@@ -31,15 +31,48 @@ typedef struct {
     TokenType type;
     double value;
     FuncType func;
+    char varName[32]; // For variables
 } Token;
 
+typedef enum {
+    NODE_NUMBER,
+    NODE_VARIABLE,
+    NODE_BINARY_OP,
+    NODE_UNARY_OP, 
+    NODE_FUNCTION
+} NodeType;
+
+typedef struct ASTNode ASTNode;
+
+struct ASTNode {
+    NodeType type;
+    union {
+        double number;
+        char varName[32];
+        struct {
+            struct ASTNode* left;
+            struct ASTNode* right;
+            TokenType op;
+        } binary;
+        struct {
+            struct ASTNode* operand;
+        } unary; // MINUS
+        struct {
+            struct ASTNode* arg;
+            FuncType func;
+        } function;
+    } data;
+};
+
+// context includes x, y, t, and other variables 
 typedef struct {
-    const char* input;
-    int pos;
-    Token current;
-} Parser;
+     double x;
+     double y;
+     double t;
+} EvalContext;
 
-void Parser_Init(Parser* p, const char* input);
-double Parser_Evaluate(Parser* p, double x);
+ASTNode* Parser_Parse(const char* input);
+double AST_Evaluate(ASTNode* node, EvalContext* ctx);
+void AST_Free(ASTNode* node);
 
-#endif // PARSER_H
+#endif

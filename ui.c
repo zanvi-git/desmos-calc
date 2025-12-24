@@ -1,5 +1,6 @@
 #include "ui.h"
 #include <string.h>
+#include <stdio.h>
 
 void DrawButton(Button *btn, Font font) {
     Color drawColor = btn->color;
@@ -33,7 +34,7 @@ void DrawInputField(InputField *input, Font font) {
     DrawTextEx(font, input->text, (Vector2){ input->rect.x + 5, input->rect.y + 10 }, fontSize, 2, BLACK);
     
     if (input->focused) {
-        // Simple blinking cursor
+        // simple blinking cursor kinda aesthetic
         if (((int)(GetTime() * 2) % 2) == 0) {
             Vector2 textSize = MeasureTextEx(font, input->text, fontSize, 2);
             DrawRectangle(input->rect.x + 5 + textSize.x, input->rect.y + 10, 2, fontSize, BLACK);
@@ -135,4 +136,44 @@ const char* UpdateKeyboard(Keyboard *kb) {
         }
     }
     return NULL;
+}
+
+bool DrawSlider(Rectangle rect, const char* text, float* value, float min, float max, Font font) {
+    bool changed = false;
+    
+    // draw Label
+    if (text) {
+        DrawTextEx(font, text, (Vector2){ rect.x, rect.y - 20 }, 16, 1, DARKGRAY);
+    }
+    
+    // draw background
+    DrawRectangleRounded(rect, 0.5f, 4, LIGHTGRAY);
+    
+    // handle input
+    if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
+        Vector2 mouse = GetMousePosition();
+        if (CheckCollisionPointRec(mouse, (Rectangle){ rect.x - 10, rect.y - 10, rect.width + 20, rect.height + 20 })) {
+            float mousePos = mouse.x - rect.x;
+            float normalized = mousePos / rect.width;
+            if (normalized < 0) normalized = 0;
+            if (normalized > 1) normalized = 1;
+            
+            *value = min + normalized * (max - min);
+            changed = true;
+        }
+    }
+    
+    // draw Knob
+    float normalized = (*value - min) / (max - min);
+    float knobX = rect.x + normalized * rect.width;
+    DrawCircle((int)knobX, (int)(rect.y + rect.height/2), rect.height, DARKGRAY);
+    DrawCircle((int)knobX, (int)(rect.y + rect.height/2), rect.height - 2, WHITE);
+    
+    // draw Value
+    char buf[32];
+    sprintf(buf, "%.2f", *value);
+    // DrawTextEx(font, buf, (Vector2){ rect.x + rect.width + 10, rect.y }, 16, 1, BLACK);
+    
+    // Let caller draw value if they want, or just verify logic.
+    return changed;
 }
